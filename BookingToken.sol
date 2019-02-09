@@ -1,48 +1,47 @@
 pragma solidity ^0.5.3;
 import "browser/Acquis.sol";
+import "browser/IERC20.sol";
 import "browser/CheckERC165.sol";
 
 
-/*************************************************************************************************************
- * BookingToken ERC20, ERC223, ERC165 ( interface 0xf771218b ) et ERC808 ( BTU Token )
- *************************************************************************************************************
- * 
- *  - Gelable (Token ET comptes clients de façon individuelle ainsi que blocage des achats en Eth de tokens mintés).
- *  - Stackable.
- *  - Mintable AVEC mintage sur Stacking.
- *  - Achetable directement en Ether: -SOIT transféré de la somme totale de Tokens ('initialSupply')
- *                                    -SOIT minté
- *  - Fonction d'AIRDROP intégrée.
- * 
- * 
- *                  Un petit mot et une pensée pour les équipes de tout Kryptosphère France : 
- * 
- *                                         - LA CLAQUE AVEC ELAN ! -
- * 
- * 
- *************************************************************************************************************
- *                                                                                      William DERENNE
- */
+/* BookingToken ERC20, ERC223, ERC165 ( interface 0xf771218b ) avec des morceaux de BTU Token.
+ 
+  - Gelable (Token ET comptes clients de façon individuelle ainsi que blocage des achats en Eth de tokens mintés).
+  - Stackable.
+  - Mintable AVEC mintage sur Stacking.
+  - Achetable directement en Ether: -SOIT transféré de la somme totale de Tokens ('initialSupply')
+                                    -SOIT minté
+  - Fonction d'AIRDROP intégrée.
+ 
+ 
+                  Un petit mot et une pensée pour les équipes de tout Kryptosphère France : 
+ 
+                                         - LA CLAQUE AVEC ELAN ! -
+ 
+ 
+
+                                                                                      William DERENNE
+*/
  
  
 interface tokenRecipient { function receiveApproval ( address _from, uint256 _value, address _token, bytes calldata _extraData ) external; }
 
-contract BookingToken is Acquis, CheckERC165 {
+contract BookingToken is Acquis, IERC20, CheckERC165 {
                     using SafeMath for uint8;
     
-    string public name;                                 // Obligation ERC20
-    string public symbol;                               // Obligation ERC20
+    string public name;                                 // ERC20
+    string public symbol;                               // ERC20
     
-    uint8 public decimals;                              // Obligation ERC20
-    uint256 public totalSupply;                         // Obligation ERC20
-    uint256 public totalEthInWei;                       // Obligation ERC20
+    uint8 public decimals;                              // ERC20
+    uint256 public totalSupply;                         // ERC20
+    uint256 public totalEthInWei;                       // ERC20
     uint256 public unitsOneEthCanBuy;                   // Nombre de tokens qu'1 Ether peut acheter.
     
     bool public bloquerToken;
     bool public bloquerAchatETH;
     bool public bloquerAchatMint;
     
-    struct Reservation {                                // ERC808
+    struct Reservation {                                // BTU Token
         address     provider;
         address     booker;
         uint        amount;
@@ -51,15 +50,14 @@ contract BookingToken is Acquis, CheckERC165 {
 
     address[] public adrClients;
     
-    mapping ( address => uint256 ) public balanceOf;                            // ERC20
-    mapping ( address => mapping ( address => uint256 ) ) public allowance;     // ERC20
+    mapping ( address => uint256 ) public balanceOf;                                // ERC20
+    mapping ( address => mapping ( address => uint256 ) ) public allowance;         // ERC20
     mapping ( address => bool ) public comptesGeles;
-    mapping ( uint => Reservation ) public reservations;                        // ERC808
+    mapping ( uint => Reservation ) public reservations;                        // BTU Token
 
-    
     event Achat ( address adrClient, uint256 montantETH, uint montantTOKEN );
     event AchatMinte ( address adrClient, uint256 montantETH, uint256 montantTOKEN );
-    event Transfer ( address indexed from, address indexed to, uint256 value );    // ERC20
+    event Transfer ( address indexed from, address indexed to, uint256 value );     // ERC20
     event Burn ( address indexed from, uint256 value );
     event Stackage ( address adrClient, uint256 montant );
     event StackageMinte ( address adrClient, uint256 montant );
@@ -87,12 +85,12 @@ contract BookingToken is Acquis, CheckERC165 {
     }
 
 
-    /**
-     * Constrcteur.
-     *
-     * Initialise le contrat en transférant la 'totalSupply' au compte 'proprio'
-     * tel que défini dans 'Acquis.sol' dont PzToken hérite.
-     */
+        /**
+         * Constrcteur.
+         *
+         * Initialise le contrat en transférant la 'totalSupply' au compte 'proprio'
+         * tel que défini dans 'Acquis.sol' dont PzToken hérite.
+         */
             constructor ( uint256 _initialSupply, uint8 _decimals, string memory _tokenName, string memory _tokenSymbol ) public {
                 
                 bloquerToken = false;                       // Allume le Token.
@@ -179,7 +177,7 @@ contract BookingToken is Acquis, CheckERC165 {
                     this.burn.selector ^
                     this.burnFrom.selector ^
                     this.mintToken.selector
-            );
+        );
     }
     
     /**
@@ -240,18 +238,20 @@ contract BookingToken is Acquis, CheckERC165 {
         assert ( balanceOf[_from] + balanceOf[_to] == previousBalances );
     }
 
-    /**
+    /** ERC20
      * Transfert de tokens.
      * Envoie `_value` tokens à `_to` depuis le wallet appelant. Doit être PUBLIC.
      *
      * @param _to L'adress du receveur
      * @param _value Le montant à envoyer
      */
-    function transfer ( address _to, uint256 _value ) public ON {       // Obligation ERC20
+    function transfer ( address _to, uint256 _value ) public ON returns ( bool ) {
         _transfer ( msg.sender, _to, _value );
+        
+        return true;
     }
 
-    /**
+    /** ERC20
      * Transfert des tokens depuis l'adresse 'from'.
      * Envoie '_value' Tokens à `_to` au nom de `_from`.
      *
@@ -268,7 +268,7 @@ contract BookingToken is Acquis, CheckERC165 {
         return true;
     }
 
-    /**
+    /** ERC223
      * Set allowance for other address
      *
      * Allows `_spender` to spend no more than `_value` tokens in your behalf
@@ -278,6 +278,7 @@ contract BookingToken is Acquis, CheckERC165 {
      */
     function approve ( address _spender, uint256 _value ) public propriosSeulement returns ( bool success ) {
         allowance[proprio][_spender] = _value;
+        
         return true;
     }
 
@@ -388,12 +389,12 @@ contract BookingToken is Acquis, CheckERC165 {
         }
     }
 
-   /**
-    * Donne _'pourcentage'% en Tokens au compte '_adrClient' selon son solde actuel, - débités de 'totalSupply'
-    * 
-    * @param _adrClient Adresse qui reçoit les Tokens
-    * @param _pourcentage Pourcentage de Tokens à transférer à '_adrClient'
-    */
+    /**
+     * Donne _'pourcentage'% en Tokens au compte '_adrClient' selon son solde actuel, - débités de 'totalSupply'
+     * 
+     * @param _adrClient Adresse qui reçoit les Tokens
+     * @param _pourcentage Pourcentage de Tokens à transférer à '_adrClient'
+     */
     function stacker ( address _adrClient, uint _pourcentage ) public propriosSeulement {
         uint _balancePrecedente = balanceOf[_adrClient];
         uint _montant = ( _balancePrecedente / 100 ) * _pourcentage;
@@ -419,6 +420,9 @@ contract BookingToken is Acquis, CheckERC165 {
         mintToken ( _adrClient, _montant );
     }
 
+    /** BTU Token
+     * 
+     */
     function escrowAmount(uint availabilityId, address booker, address provider, uint amount, uint commission) public returns (bool response) {
         if ( balanceOf[booker] < amount ) {
             return false;
@@ -428,7 +432,10 @@ contract BookingToken is Acquis, CheckERC165 {
         
         return true;
     }
-        
+
+    /** BTU Token
+     * 
+     */        
     function escrowBackToAccount ( uint availabilityId, address payTo ) public returns ( bool response ) {
         balanceOf[payTo] += reservations[availabilityId].amount;
         reservations[availabilityId].amount = 0;
@@ -437,6 +444,9 @@ contract BookingToken is Acquis, CheckERC165 {
         return true;
     }
         
+    /** BTU Token
+     * 
+     */    
     function escrowResolveDispute( uint availabilityId ) public returns ( bool response ) {
         balanceOf[reservations[availabilityId].provider] += reservations[availabilityId].amount - reservations[availabilityId].commission;
         balanceOf[reservations[availabilityId].booker] += reservations[availabilityId].commission;
@@ -445,7 +455,10 @@ contract BookingToken is Acquis, CheckERC165 {
     
         return true;
     }
-        
+    
+    /** BTU Token
+     * 
+     */        
     function listReservationsDetails ( uint availabilityNumber ) public view returns ( address, address, uint, uint ) {
         address                 provider;
         address                 booker;
@@ -473,7 +486,7 @@ contract BookingToken is Acquis, CheckERC165 {
         emit AchatMinte ( msg.sender, msg.value, _amount );
     }
 
-    /**
+    /** ERC223
      * Achat de Tokens en Eth au prix de 'unitsOneEthCanBuy'.
      */
     function() external payable Secu ON AchatEthON {
